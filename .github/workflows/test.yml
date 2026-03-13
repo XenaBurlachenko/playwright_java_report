@@ -1,0 +1,69 @@
+name: test
+
+on:
+  push:
+    branches: [ main, master, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        java-version: [11, 17, 21]
+      fail-fast: false
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: ${{ matrix.java-version }}
+        cache: 'maven'
+
+    - name: Cache Playwright browsers
+      uses: actions/cache@v3
+      id: playwright-cache
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ runner.os }}-playwright-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-playwright-
+
+    - name: Install Playwright browsers
+      run: mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="install chromium"
+
+    - name: Create directories for reports
+      run: |
+        mkdir -p test-reports/screenshots
+        mkdir -p target/test-reports
+
+    - name: Run tests with Maven
+      run: mvn clean test -Pci
+      continue-on-error: true
+      
+    - name: Generate timestamp for report
+      id: timestamp
+      run: echo "timestamp=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
+
+    - name: Archive test reports
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-reports-java-${{ matrix.java-version }}-${{ steps.timestamp.outputs.timestamp }}
+        path: |
+          test-reports/
+          target/surefire-reports/
+          target/failsafe-reports/
+        retention-days: 30
+
+    - name: Upload screenshots
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: failure-screenshots-java-${{ matrix.java-version }}
+        path: test-reports/screenshots/
+        retention-days: 30
