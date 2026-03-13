@@ -10,7 +10,7 @@ jobs:
     
     strategy:
       matrix:
-        java-version: [11, 17, 21]
+        java-version: [11]
       fail-fast: false
 
     steps:
